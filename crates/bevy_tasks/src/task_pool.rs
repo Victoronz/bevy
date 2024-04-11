@@ -107,7 +107,7 @@ impl TaskPoolBuilder {
 #[derive(Debug)]
 pub struct TaskPool {
     /// The executor for the pool.
-    executor: Arc<async_executor::Executor<'static>>,
+    executor: triomphe::Arc<async_executor::Executor<'static>>,
 
     // The inner state of the pool.
     threads: Vec<JoinHandle<()>>,
@@ -117,11 +117,11 @@ pub struct TaskPool {
 impl TaskPool {
     thread_local! {
         static LOCAL_EXECUTOR: async_executor::LocalExecutor<'static> = const { async_executor::LocalExecutor::new() };
-        static THREAD_EXECUTOR: Arc<ThreadExecutor<'static>> = Arc::new(ThreadExecutor::new());
+        static THREAD_EXECUTOR: triomphe::Arc<ThreadExecutor<'static>> = triomphe::Arc::new(ThreadExecutor::new());
     }
 
     /// Each thread should only create one `ThreadExecutor`, otherwise, there are good chances they will deadlock
-    pub fn get_thread_executor() -> Arc<ThreadExecutor<'static>> {
+    pub fn get_thread_executor() -> triomphe::Arc<ThreadExecutor<'static>> {
         Self::THREAD_EXECUTOR.with(|executor| executor.clone())
     }
 
@@ -133,7 +133,7 @@ impl TaskPool {
     fn new_internal(builder: TaskPoolBuilder) -> Self {
         let (shutdown_tx, shutdown_rx) = async_channel::unbounded::<()>();
 
-        let executor = Arc::new(async_executor::Executor::new());
+        let executor = triomphe::Arc::new(async_executor::Executor::new());
 
         let num_threads = builder
             .num_threads
@@ -141,7 +141,7 @@ impl TaskPool {
 
         let threads = (0..num_threads)
             .map(|i| {
-                let ex = Arc::clone(&executor);
+                let ex = triomphe::Arc::clone(&executor);
                 let shutdown_rx = shutdown_rx.clone();
 
                 let thread_name = if let Some(thread_name) = builder.thread_name.as_deref() {

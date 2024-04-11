@@ -794,7 +794,7 @@ unsafe fn evaluate_and_fold_conditions(
 
 /// New-typed [`ThreadExecutor`] [`Resource`] that is used to run systems on the main thread
 #[derive(Resource, Clone)]
-pub struct MainThreadExecutor(pub Arc<ThreadExecutor<'static>>);
+pub struct MainThreadExecutor(pub triomphe::Arc<ThreadExecutor<'static>>);
 
 impl Default for MainThreadExecutor {
     fn default() -> Self {

@@ -30,6 +30,7 @@ serde = { version = "1", optional = true, default-features = false }
 thiserror = "1.0"
 nonmax = "0.5"
 arrayvec = { version = "0.7.4", optional = true }
+triomphe = "0.1.11"
 
 [dev-dependencies]
 rand = "0.8"
