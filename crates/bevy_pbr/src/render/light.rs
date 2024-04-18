@@ -15,7 +15,7 @@ use bevy_render::{
     render_resource::*,
     renderer::{RenderContext, RenderDevice, RenderQueue},
     texture::*,
-    view::{ExtractedView, RenderLayers, ViewVisibility, VisibleEntities},
+    view::{ExtractedView, RenderLayers, ViewVisibility, VisibleEntities, WithMesh},
     Extract,
 };
 use bevy_transform::{components::GlobalTransform, prelude::Transform};
@@ -1647,13 +1647,13 @@ pub fn queue_shadows<M: Material>(
                     .get(*light_entity)
                     .expect("Failed to get spot light visible entities"),
             };
-            // NOTE: Lights with shadow mapping disabled will have no visible entities
-            // so no meshes will be queued
-
             let mut light_key = MeshPipelineKey::DEPTH_PREPASS;
             light_key.set(MeshPipelineKey::DEPTH_CLAMP_ORTHO, is_directional_light);
 
-            for entity in visible_entities.iter().copied() {
+            // NOTE: Lights with shadow mapping disabled will have no visible entities
+            // so no meshes will be queued
+
+            for entity in visible_entities.iter::<WithMesh>().copied() {
                 let Some(mesh_instance) = render_mesh_instances.render_mesh_queue_data(entity)
                 else {
                     continue;
@@ -1690,7 +1690,8 @@ pub fn queue_shadows<M: Material>(
                     AlphaMode::Mask(_)
                     | AlphaMode::Blend
                     | AlphaMode::Premultiplied
-                    | AlphaMode::Add => MeshPipelineKey::MAY_DISCARD,
+                    | AlphaMode::Add
+                    | AlphaMode::AlphaToCoverage => MeshPipelineKey::MAY_DISCARD,
                     _ => MeshPipelineKey::NONE,
                 };
                 let pipeline_id = pipelines.specialize(
@@ -1849,8 +1850,7 @@ impl Node for ShadowPassNode {
                 let diagnostics = render_context.diagnostic_recorder();
                 render_context.add_command_buffer_generation_task(move |render_device| {
                     #[cfg(feature = "trace")]
-                    let _shadow_pass_span = info_span!("shadow_pass").entered();
-
+                    let _shadow_pass_span = info_span!("", "{}", view_light.pass_name).entered();
                     let mut command_encoder =
                         render_device.create_command_encoder(&CommandEncoderDescriptor {
                             label: Some("shadow_pass_command_encoder"),
