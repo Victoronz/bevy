@@ -1,18 +1,22 @@
 use crate::{
     archetype::{Archetype, ArchetypeEntity, Archetypes},
     component::Tick,
-    entity::{Entities, Entity},
+    entity::{
+        DuplicateEntityFilterIter, Entities, Entity, EntityHashSet, EntitySet, TrustedEntityBorrow,
+        UniqueEntityIter,
+    },
     query::{ArchetypeFilter, DebugCheckedUnwrap, QueryState, StorageId},
     storage::{Table, TableRow, Tables},
     world::unsafe_world_cell::UnsafeWorldCell,
 };
-use core::{
-    borrow::Borrow,
+use core::borrow::Borrow;
+use std::{
     cmp::Ordering,
     fmt::{self, Debug, Formatter},
     iter::FusedIterator,
     mem::MaybeUninit,
     ops::Range,
+    vec,
 };
 
 use super::{QueryData, QueryFilter, ReadOnlyQueryData};
@@ -1103,6 +1107,11 @@ impl<'w, 's, D: QueryData, F: QueryFilter> Iterator for QueryIter<'w, 's, D, F> 
 // This is correct as [`QueryIter`] always returns `None` once exhausted.
 impl<'w, 's, D: QueryData, F: QueryFilter> FusedIterator for QueryIter<'w, 's, D, F> {}
 
+unsafe impl<'w, 's, D: QueryData<Item<'w>: TrustedEntityBorrow>, F: QueryFilter> EntitySet
+    for QueryIter<'w, 's, D, F>
+{
+}
+
 impl<'w, 's, D: QueryData, F: QueryFilter> Debug for QueryIter<'w, 's, D, F> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("QueryIter").finish()
@@ -1234,6 +1243,16 @@ impl<'w, 's, D: QueryData, F: QueryFilter, I: Iterator> FusedIterator
     for QuerySortedIter<'w, 's, D, F, I>
 where
     I: FusedIterator<Item = Entity>,
+{
+}
+
+unsafe impl<
+        'w,
+        's,
+        D: QueryData<Item<'w>: TrustedEntityBorrow>,
+        F: QueryFilter,
+        I: Iterator<Item = Entity>,
+    > EntitySet for QuerySortedIter<'w, 's, D, F, I>
 {
 }
 
@@ -1457,11 +1476,192 @@ impl<'w, 's, D: ReadOnlyQueryData, F: QueryFilter, I: Iterator<Item: Borrow<Enti
 {
 }
 
+unsafe impl<
+        'w,
+        's,
+        D: ReadOnlyQueryData<Item<'w>: TrustedEntityBorrow>,
+        F: QueryFilter,
+        I: Iterator<Item: TrustedEntityBorrow + Borrow<Entity>> + EntitySet,
+    > EntitySet for QueryManyIter<'w, 's, D, F, I>
+{
+}
+
+impl<
+        'w,
+        's,
+        D: QueryData,
+        F: QueryFilter,
+        I: Iterator<Item: TrustedEntityBorrow + Borrow<Entity>>,
+    > QueryManyIter<'w, 's, D, F, I>
+{
+    fn try_into_unique(
+        self,
+    ) -> Result<
+        QueryManyUniqueIter<'w, 's, D, F, UniqueEntityIter<vec::IntoIter<I::Item>>>,
+        QueryManyIter<'w, 's, D, F, vec::IntoIter<I::Item>>,
+    > {
+        let mut used = EntityHashSet::default();
+        let entities: Vec<_> = self.entity_iter.collect();
+
+        if entities.iter().all(move |e| used.insert(*e.borrow())) {
+            return Ok(QueryManyUniqueIter(QueryManyIter {
+                entity_iter: UniqueEntityIter {
+                    iter: entities.into_iter(),
+                },
+                entities: self.entities,
+                tables: self.tables,
+                archetypes: self.archetypes,
+                fetch: self.fetch,
+                filter: self.filter,
+                query_state: self.query_state,
+            }));
+        }
+
+        Err(QueryManyIter {
+            entity_iter: entities.into_iter(),
+            entities: self.entities,
+            tables: self.tables,
+            archetypes: self.archetypes,
+            fetch: self.fetch,
+            filter: self.filter,
+            query_state: self.query_state,
+        })
+    }
+
+    fn to_unique(self) -> QueryManyUniqueIter<'w, 's, D, F, DuplicateEntityFilterIter<I>> {
+        QueryManyUniqueIter(QueryManyIter {
+            entity_iter: DuplicateEntityFilterIter::new(self.entity_iter),
+            entities: self.entities,
+            tables: self.tables,
+            archetypes: self.archetypes,
+            fetch: self.fetch,
+            filter: self.filter,
+            query_state: self.query_state,
+        })
+    }
+}
+
 impl<'w, 's, D: QueryData, F: QueryFilter, I: Iterator<Item: Borrow<Entity>>> Debug
     for QueryManyIter<'w, 's, D, F, I>
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("QueryManyIter").finish()
+    }
+}
+
+/// An [`Iterator`] over the query items generated from an iterator of unique [`Entity`]s.
+///
+/// Items are returned in the order of the provided iterator.
+/// Entities that don't match the query are skipped.
+///
+/// In contrast with `QueryManyIter`, this allows for mutable iteration without a `fetch_next` method.
+///
+/// This struct is created by the [`QueryManyIter::entities_all_unique`] and [`QueryManyIter::dedup_entities`] methods.
+pub struct QueryManyUniqueIter<
+    'w,
+    's,
+    D: QueryData,
+    F: QueryFilter,
+    I: EntitySet + Iterator<Item: TrustedEntityBorrow + Borrow<Entity>>,
+>(QueryManyIter<'w, 's, D, F, I>);
+
+impl<
+        'w,
+        's,
+        D: QueryData,
+        F: QueryFilter,
+        I: EntitySet + Iterator<Item: TrustedEntityBorrow + Borrow<Entity>>,
+    > QueryManyUniqueIter<'w, 's, D, F, I>
+{
+    /// # Safety
+    /// - `world` must have permission to access any of the components registered in `query_state`.
+    /// - `world` must be the same one used to initialize `query_state`.
+    pub(crate) unsafe fn new<EntityList: IntoIterator<IntoIter = I>>(
+        world: UnsafeWorldCell<'w>,
+        query_state: &'s QueryState<D, F>,
+        entity_list: EntityList,
+        last_run: Tick,
+        this_run: Tick,
+    ) -> QueryManyUniqueIter<'w, 's, D, F, I> {
+        let fetch = D::init_fetch(world, &query_state.fetch_state, last_run, this_run);
+        let filter = F::init_fetch(world, &query_state.filter_state, last_run, this_run);
+        QueryManyUniqueIter(QueryManyIter {
+            query_state,
+            entities: world.entities(),
+            archetypes: world.archetypes(),
+            // SAFETY: We only access table data that has been registered in `query_state`.
+            // This means `world` has permission to access the data we use.
+            tables: &world.storages().tables,
+            fetch,
+            filter,
+            entity_iter: entity_list.into_iter(),
+        })
+    }
+}
+
+impl<
+        'w,
+        's,
+        D: QueryData,
+        F: QueryFilter,
+        I: EntitySet + Iterator<Item: TrustedEntityBorrow + Borrow<Entity>>,
+    > Iterator for QueryManyUniqueIter<'w, 's, D, F, I>
+{
+    type Item = D::Item<'w>;
+
+    #[inline(always)]
+    fn next(&mut self) -> Option<Self::Item> {
+        // SAFETY: Entities are guaranteed to be unique, thus do not alias.
+        unsafe {
+            QueryManyIter::<'w, 's, D, F, I>::fetch_next_aliased_unchecked(
+                &mut self.0.entity_iter,
+                self.0.entities,
+                self.0.tables,
+                self.0.archetypes,
+                &mut self.0.fetch,
+                &mut self.0.filter,
+                self.0.query_state,
+            )
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (_, max_size) = self.0.entity_iter.size_hint();
+        (0, max_size)
+    }
+}
+
+// This is correct as [`QueryManyIter`] always returns `None` once exhausted.
+impl<
+        'w,
+        's,
+        D: QueryData,
+        F: QueryFilter,
+        I: EntitySet + Iterator<Item: TrustedEntityBorrow + Borrow<Entity>>,
+    > FusedIterator for QueryManyUniqueIter<'w, 's, D, F, I>
+{
+}
+
+unsafe impl<
+        'w,
+        's,
+        D: QueryData<Item<'w>: TrustedEntityBorrow>,
+        F: QueryFilter,
+        I: EntitySet + Iterator<Item: TrustedEntityBorrow + Borrow<Entity>>,
+    > EntitySet for QueryManyUniqueIter<'w, 's, D, F, I>
+{
+}
+
+impl<
+        'w,
+        's,
+        D: QueryData,
+        F: QueryFilter,
+        I: EntitySet + Iterator<Item: TrustedEntityBorrow + Borrow<Entity>>,
+    > Debug for QueryManyUniqueIter<'w, 's, D, F, I>
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("QueryManyUniqueIter").finish()
     }
 }
 

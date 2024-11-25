@@ -35,17 +35,29 @@
 //! [`World::despawn`]: crate::world::World::despawn
 //! [`EntityWorldMut::insert`]: crate::world::EntityWorldMut::insert
 //! [`EntityWorldMut::remove`]: crate::world::EntityWorldMut::remove
+mod entity_set;
 mod map_entities;
 mod visit_entities;
 #[cfg(feature = "bevy_reflect")]
 use bevy_reflect::Reflect;
 #[cfg(all(feature = "bevy_reflect", feature = "serialize"))]
 use bevy_reflect::{ReflectDeserialize, ReflectSerialize};
+pub use entity_set::*;
 pub use map_entities::*;
 pub use visit_entities::*;
 
 mod hash;
 pub use hash::*;
+
+#[cfg(feature = "entity_index_map")]
+mod index_map;
+#[cfg(feature = "entity_index_map")]
+mod index_set;
+
+#[cfg(feature = "entity_index_map")]
+pub use index_map::EntityIndexMap;
+#[cfg(feature = "entity_index_map")]
+pub use index_set::EntityIndexSet;
 
 use bevy_utils::tracing::warn;
 
@@ -491,6 +503,7 @@ impl<'a> Iterator for ReserveEntitiesIterator<'a> {
 
 impl<'a> ExactSizeIterator for ReserveEntitiesIterator<'a> {}
 impl<'a> core::iter::FusedIterator for ReserveEntitiesIterator<'a> {}
+unsafe impl EntitySet for ReserveEntitiesIterator<'_> {}
 
 /// A [`World`]'s internal metadata store on all of its entities.
 ///

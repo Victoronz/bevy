@@ -11,13 +11,14 @@ categories = ["game-engines", "data-structures"]
 rust-version = "1.77.0"
 
 [features]
-default = ["bevy_reflect"]
+default = ["bevy_reflect", "entity_index_map"]
 trace = []
 multi_threaded = ["bevy_tasks/multi_threaded", "arrayvec"]
 bevy_debug_stepping = []
 serialize = ["dep:serde"]
 track_change_detection = []
 reflect_functions = ["bevy_reflect", "bevy_reflect/functions"]
+entity_index_map = ["dep:indexmap"]
 
 [dependencies]
 bevy_ptr = { path = "../bevy_ptr", version = "0.15.0-dev" }
@@ -42,6 +43,7 @@ derive_more = { version = "1", default-features = false, features = [
 nonmax = "0.5"
 arrayvec = { version = "0.7.4", optional = true }
 smallvec = "1"
+indexmap = { version = "2.6.0", optional = true }
 
 [dev-dependencies]
 rand = "0.8"

@@ -2,7 +2,7 @@ use crate::{
     archetype::{Archetype, ArchetypeComponentId, ArchetypeGeneration, ArchetypeId},
     batching::BatchingStrategy,
     component::{ComponentId, Tick},
-    entity::Entity,
+    entity::{Entity, EntitySet, TrustedEntityBorrow},
     prelude::FromWorld,
     query::{
         Access, DebugCheckedUnwrap, FilteredAccess, QueryCombinationIter, QueryIter, QueryParIter,
@@ -18,7 +18,7 @@ use fixedbitset::FixedBitSet;
 
 use super::{
     NopWorldQuery, QueryBuilder, QueryData, QueryEntityError, QueryFilter, QueryManyIter,
-    QuerySingleError, ROQueryItem,
+    QueryManyUniqueIter, QuerySingleError, ROQueryItem,
 };
 
 /// An ID for either a table or an archetype. Used for Query iteration.
@@ -1271,6 +1271,99 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
         }
     }
 
+    /// Returns an [`Iterator`] over the read-only query items generated from an [`Entity`] list.
+    ///
+    /// Items are returned in the order of the list of entities.
+    /// Entities that don't match the query are skipped.
+    ///
+    /// # See also
+    ///
+    /// - [`iter_many_mut`](Self::iter_many_mut) to get mutable query items.
+    #[inline]
+    pub fn iter_many_unique<
+        'w,
+        's,
+        EntityList: EntitySet<IntoIter: EntitySet, Item: Borrow<Entity>>,
+    >(
+        &'s mut self,
+        world: &'w World,
+        entities: EntityList,
+    ) -> QueryManyUniqueIter<'w, 's, D::ReadOnly, F, EntityList::IntoIter> {
+        self.update_archetypes(world);
+        // SAFETY: query is read only
+        unsafe {
+            self.as_readonly().iter_many_unique_unchecked_manual(
+                entities,
+                world.as_unsafe_world_cell_readonly(),
+                world.last_change_tick(),
+                world.read_change_tick(),
+            )
+        }
+    }
+
+    /// Returns an [`Iterator`] over the read-only query items generated from an [`Entity`] list.
+    ///
+    /// Items are returned in the order of the list of entities.
+    /// Entities that don't match the query are skipped.
+    ///
+    /// If `world` archetypes changed since [`Self::update_archetypes`] was last called,
+    /// this will skip entities contained in new archetypes.
+    ///
+    /// This can only be called for read-only queries.
+    ///
+    /// # See also
+    ///
+    /// - [`iter_many`](Self::iter_many) to update archetypes.
+    /// - [`iter_manual`](Self::iter_manual) to iterate over all query items.
+    #[inline]
+    pub fn iter_many_unique_manual<
+        'w,
+        's,
+        EntityList: EntitySet<IntoIter: EntitySet, Item: Borrow<Entity>>,
+    >(
+        &'s self,
+        world: &'w World,
+        entities: EntityList,
+    ) -> QueryManyUniqueIter<'w, 's, D::ReadOnly, F, EntityList::IntoIter> {
+        self.validate_world(world.id());
+        // SAFETY: query is read only, world id is validated
+        unsafe {
+            self.as_readonly().iter_many_unique_unchecked_manual(
+                entities,
+                world.as_unsafe_world_cell_readonly(),
+                world.last_change_tick(),
+                world.read_change_tick(),
+            )
+        }
+    }
+
+    /// Returns an iterator over the query items generated from an [`Entity`] list.
+    ///
+    /// Items are returned in the order of the list of entities.
+    /// Entities that don't match the query are skipped.
+    #[inline]
+    pub fn iter_many_unique_mut<
+        'w,
+        's,
+        EntityList: EntitySet<IntoIter: EntitySet, Item: Borrow<Entity>>,
+    >(
+        &'s mut self,
+        world: &'w mut World,
+        entities: EntityList,
+    ) -> QueryManyUniqueIter<'w, 's, D, F, EntityList::IntoIter> {
+        self.update_archetypes(world);
+        let change_tick = world.change_tick();
+        let last_change_tick = world.last_change_tick();
+        // SAFETY: Query has unique world access.
+        unsafe {
+            self.iter_many_unique_unchecked_manual(
+                entities,
+                world.as_unsafe_world_cell(),
+                last_change_tick,
+                change_tick,
+            )
+        }
+    }
     /// Returns an [`Iterator`] over the query results for the given [`World`].
     ///
     /// This iterator is always guaranteed to return results from each matching entity once and only once.
@@ -1360,6 +1453,34 @@ impl<D: QueryData, F: QueryFilter> QueryState<D, F> {
         EntityList: IntoIterator<Item: Borrow<Entity>>,
     {
         QueryManyIter::new(world, self, entities, last_run, this_run)
+    }
+
+    /// Returns an [`Iterator`] for the given [`World`] and list of [`Entity`]'s, where the last change and
+    /// the current change tick are given.
+    ///
+    /// This iterator is always guaranteed to return results from each unique pair of matching entities.
+    /// Iteration order is not guaranteed.
+    ///
+    /// # Safety
+    ///
+    /// This does not check for mutable query correctness. To be safe, make sure mutable queries
+    /// have unique access to the components they query.
+    /// This does not check for entity uniqueness
+    /// This does not validate that `world.id()` matches `self.world_id`. Calling this on a `world`
+    /// with a mismatched [`WorldId`] is unsound.
+    #[inline]
+    pub(crate) unsafe fn iter_many_unique_unchecked_manual<
+        'w,
+        's,
+        EntityList: EntitySet<IntoIter: EntitySet, Item: Borrow<Entity>>,
+    >(
+        &'s self,
+        entities: EntityList,
+        world: UnsafeWorldCell<'w>,
+        last_run: Tick,
+        this_run: Tick,
+    ) -> QueryManyUniqueIter<'w, 's, D, F, EntityList::IntoIter> {
+        QueryManyUniqueIter::new(world, self, entities, last_run, this_run)
     }
 
     /// Returns an [`Iterator`] over all possible combinations of `K` query results for the
