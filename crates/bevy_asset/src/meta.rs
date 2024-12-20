@@ -124,7 +124,7 @@ pub trait AssetMetaDyn: Downcast + Send + Sync {
     /// Serializes the internal [`AssetMeta`].
     fn serialize(&self) -> Vec<u8>;
     /// Returns a reference to the [`ProcessedInfo`] if it exists.
-    fn processed_info(&self) -> &Option<ProcessedInfo>;
+    fn processed_info(&self) -> Option<&ProcessedInfo>;
     /// Returns a mutable reference to the [`ProcessedInfo`] if it exists.
     fn processed_info_mut(&mut self) -> &mut Option<ProcessedInfo>;
 }
@@ -149,8 +149,8 @@ impl<L: AssetLoader, P: Process> AssetMetaDyn for AssetMeta<L, P> {
             .expect("type is convertible to ron")
             .into_bytes()
     }
-    fn processed_info(&self) -> &Option<ProcessedInfo> {
-        &self.processed_info
+    fn processed_info(&self) -> Option<&ProcessedInfo> {
+        self.processed_info.as_ref()
     }
     fn processed_info_mut(&mut self) -> &mut Option<ProcessedInfo> {
         &mut self.processed_info

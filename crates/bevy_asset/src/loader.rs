@@ -535,8 +535,10 @@ impl<'a> LoadContext<'a> {
                 dependency: path.clone(),
                 error,
             })?;
-        let info = meta.processed_info().as_ref();
-        let hash = info.map(|i| i.full_hash).unwrap_or_default();
+        let hash = meta
+            .processed_info()
+            .map(|i| i.full_hash)
+            .unwrap_or_default();
         self.loader_dependencies.insert(path, hash);
         Ok(loaded_asset)
     }

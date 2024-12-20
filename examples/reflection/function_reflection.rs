@@ -165,9 +165,9 @@ fn main() {
     // This is useful for functions that can't be converted via the `IntoFunction` trait.
     // For example, this function doesn't implement `IntoFunction` due to the fact that
     // the lifetime of the return value is not tied to the lifetime of the first argument.
-    fn get_or_insert(value: i32, container: &mut Option<i32>) -> &i32 {
-        if container.is_none() {
-            *container = Some(value);
+    fn get_or_insert(value: i32, container: Option<&mut i32>) -> &i32 {
+        if let Some(container) = container {
+            *container = value;
         }
 
         container.as_ref().unwrap()
@@ -180,7 +180,7 @@ fn main() {
             // exactly the number of arguments we expect.
             // We can retrieve them out in order (note that this modifies the `ArgList`):
             let value = args.take::<i32>()?;
-            let container = args.take::<&mut Option<i32>>()?;
+            let container = args.take::<Option<&mut i32>>()?;
 
             // We could have also done the following to make use of type inference:
             // let value = args.take_owned()?;
@@ -203,7 +203,7 @@ fn main() {
             // And it aids consumers of the function with their own validation and debugging.
             // Arguments should be provided in the order they are defined in the function.
             .with_arg::<i32>("value")
-            .with_arg::<&mut Option<i32>>("container")
+            .with_arg::<Option<&mut i32>>("container")
             // We can provide return information as well.
             .with_return::<&i32>(),
     ));

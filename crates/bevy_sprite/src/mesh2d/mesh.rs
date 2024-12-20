@@ -332,7 +332,7 @@ impl Mesh2dPipeline {
     pub fn get_image_texture<'a>(
         &'a self,
         gpu_images: &'a RenderAssets<GpuImage>,
-        handle_option: &Option<Handle<Image>>,
+        handle_option: Option<&Handle<Image>>,
     ) -> Option<(&'a TextureView, &'a Sampler)> {
         if let Some(handle) = handle_option {
             let gpu_image = gpu_images.get(handle)?;

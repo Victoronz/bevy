@@ -742,7 +742,7 @@ where
 /// populates `sampler` if this is the first such view.
 pub(crate) fn add_cubemap_texture_view<'a>(
     texture_views: &mut Vec<&'a <TextureView as Deref>::Target>,
-    sampler: &mut Option<&'a Sampler>,
+    sampler: Option<&mut &'a Sampler>,
     image_id: AssetId<Image>,
     images: &'a RenderAssets<GpuImage>,
     fallback_image: &'a FallbackImage,
@@ -754,8 +754,8 @@ pub(crate) fn add_cubemap_texture_view<'a>(
         }
         Some(image) => {
             // If this is the first texture view, populate `sampler`.
-            if sampler.is_none() {
-                *sampler = Some(&image.sampler);
+            if let Some(sampler) = sampler {
+                *sampler = &image.sampler;
             }
 
             texture_views.push(&*image.texture_view);

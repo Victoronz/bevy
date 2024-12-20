@@ -273,7 +273,7 @@ impl<'a> RenderViewIrradianceVolumeBindGroupEntries<'a> {
             for &cubemap_id in &irradiance_volumes.binding_index_to_textures {
                 add_cubemap_texture_view(
                     &mut texture_views,
-                    &mut sampler,
+                    sampler.as_mut(),
                     cubemap_id,
                     images,
                     fallback_image,

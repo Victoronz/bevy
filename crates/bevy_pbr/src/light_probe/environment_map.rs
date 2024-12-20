@@ -266,14 +266,14 @@ impl<'a> RenderViewEnvironmentMapBindGroupEntries<'a> {
                 for &cubemap_id in &environment_maps.binding_index_to_textures {
                     add_cubemap_texture_view(
                         &mut diffuse_texture_views,
-                        &mut sampler,
+                        sampler.as_mut(),
                         cubemap_id.diffuse,
                         images,
                         fallback_image,
                     );
                     add_cubemap_texture_view(
                         &mut specular_texture_views,
-                        &mut sampler,
+                        sampler.as_mut(),
                         cubemap_id.specular,
                         images,
                         fallback_image,
