@@ -481,66 +481,6 @@ impl<T: TrustedEntityBorrow> UniqueEntityVec<T> {
     {
         self.0.splice(range, replace_with)
     }
-
-    pub fn swap(&mut self, a: usize, b: usize) {
-        self.0.swap(a, b)
-    }
-
-    pub fn reverse(&mut self) {
-        self.0.reverse()
-    }
-
-    pub fn sort_unstable(&mut self)
-    where
-        T: Ord,
-    {
-        self.0.sort_unstable()
-    }
-
-    pub fn sort_unstable_by<F>(&mut self, compare: F)
-    where
-        F: FnMut(&T, &T) -> Ordering,
-    {
-        self.0.sort_unstable_by(compare)
-    }
-
-    pub fn rotate_left(&mut self, mid: usize) {
-        self.0.rotate_left(mid)
-    }
-
-    pub fn rotate_right(&mut self, mid: usize) {
-        self.0.rotate_right(mid)
-    }
-
-    pub fn sort(&mut self)
-    where
-        T: Ord,
-    {
-        self.0.sort()
-    }
-
-    pub fn sort_by<F>(&mut self, compare: F)
-    where
-        F: FnMut(&T, &T) -> Ordering,
-    {
-        self.0.sort_by(compare)
-    }
-
-    pub fn sort_by_key<K, F>(&mut self, f: F)
-    where
-        F: FnMut(&T) -> K,
-        K: Ord,
-    {
-        self.0.sort_by_key(f)
-    }
-
-    pub fn sort_by_cached_key<K, F>(&mut self, f: F)
-    where
-        F: FnMut(&T) -> K,
-        K: Ord,
-    {
-        self.0.sort_by_cached_key(f)
-    }
 }
 
 impl<T: TrustedEntityBorrow + Clone> UniqueEntityVec<T> {
