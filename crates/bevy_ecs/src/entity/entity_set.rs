@@ -168,7 +168,8 @@ pub unsafe trait EntitySet: IntoIterator<Item: TrustedEntityBorrow> {
     where
         Self: Sized,
     {
-        UniqueEntityVec(self.into_iter().collect())
+        // SAFETY: We are collecting an EntitySet.
+        unsafe { UniqueEntityVec::from_vec_unchecked((self.into_iter().collect())) }
     }
 }
 
@@ -884,7 +885,7 @@ impl<T: TrustedEntityBorrow, const N: usize> TryFrom<UniqueEntityVec<T>>
     type Error = UniqueEntityVec<T>;
 
     fn try_from(value: UniqueEntityVec<T>) -> Result<Self, Self::Error> {
-        <[T; N] as TryFrom<Vec<T>>>::try_from(value.0)
+        <[T; N] as TryFrom<Vec<T>>>::try_from(value.0)  
             .map(|v|
             // SAFETY: All elements in the original Vec are unique.
             unsafe { UniqueEntityArray::from_array_unchecked(v) })
