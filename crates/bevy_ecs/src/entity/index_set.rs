@@ -46,6 +46,11 @@ impl EntityIndexSet {
         Self(IndexSet::with_capacity_and_hasher(n, EntityHash))
     }
 
+    /// Constructs an `EntityIndexSet` from an [`IndexSet`].
+    pub fn from_index_set(set: IndexSet<Entity, EntityHash>) -> Self {
+        Self(set)
+    }
+
     /// Returns the inner [`IndexSet`].
     pub fn into_inner(self) -> IndexSet<Entity, EntityHash> {
         self.0

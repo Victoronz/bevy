@@ -48,6 +48,11 @@ impl<V> EntityIndexMap<V> {
         Self(IndexMap::with_capacity_and_hasher(n, EntityHash))
     }
 
+    /// Constructs an `EntityIndexMap` from an [`IndexMap`].
+    pub fn from_index_map(set: IndexMap<Entity, V, EntityHash>) -> Self {
+        Self(set)
+    }
+
     /// Returns the inner [`IndexMap`].
     pub fn into_inner(self) -> IndexMap<Entity, V, EntityHash> {
         self.0

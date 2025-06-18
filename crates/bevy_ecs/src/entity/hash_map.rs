@@ -40,6 +40,11 @@ impl<V> EntityHashMap<V> {
         Self(HashMap::with_capacity_and_hasher(n, EntityHash))
     }
 
+    /// Constructs an `EntityHashMap` from an [`HashMap`].
+    pub fn from_index_map(set: HashMap<Entity, V, EntityHash>) -> Self {
+        Self(set)
+    }
+
     /// Returns the inner [`HashMap`].
     pub fn into_inner(self) -> HashMap<Entity, V, EntityHash> {
         self.0

@@ -53,6 +53,11 @@ impl EntityHashSet {
         self.0.is_empty()
     }
 
+    /// Constructs an `EntityHashSet` from an [`HashSet`].
+    pub fn from_hash_set(set: HashSet<Entity, EntityHash>) -> Self {
+        Self(set)
+    }
+
     /// Returns the inner [`HashSet`].
     pub fn into_inner(self) -> HashSet<Entity, EntityHash> {
         self.0
